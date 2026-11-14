@@ -56,19 +56,20 @@ bool BTree::remove(const Value& key) {
     //checks to see if a tree exists
     if (root == nullptr)
     {
-        return false
+        return false;
     }
 
     //obtains the location of the node
     // i dont think this actually does something rn
-    //BTreeNode* subtree = search(root, key);
+    //const Row* subtree = find(key);
 
-    //check to see if is leaf and deletes
-    if (subtree->children.empty())
-    {
-        delete key;
-    }
-    if(n)
+    removeFromNode(root, key);
+    ////check to see if is leaf and deletes
+    //if (subtree->children.empty())
+    //{
+    //    removeFromLeaf(subtree, index)
+    //}
+    //if(n)
     (void)key;
     return false;
 }
@@ -88,6 +89,17 @@ I want a find function
     it should locate the key
 *************/
 
+bool value_equal(const Value& key1, const Value& key2)
+{
+    if (key1.text == key2.text && key1.type == key2.type)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
 
 
 /*******************************************************
@@ -99,30 +111,60 @@ I want a find function
 * -Zander Dennison
 *******************************************************/
 
-Row* search(BTreeNode* node, const Value& key)
-{
-    if (node == nullptr)
-    {
-        return nullptr;
-    }
-    
-    size_t i = findIndex(node, key);
-
-    if (i < node->keys.size() && node->keys[i] == key)
-    {
-        return &node->rows[i];
-    }
-    else if (node->children.empty())
-    {
-        return nullptr;
-    }
-    else
-    {
-        return search(node->children[i], key);
-    }
-}
-
-
+//Row* BTree::find(BTreeNode* node, const Value& key)
+//{
+//    if (node == nullptr)
+//    {
+//        return nullptr;
+//    }
+//    
+//    size_t i = BTree::findIndex(node, key);
+//
+    //bool equal = false;
+    //if (node->keys[i].text == key.text && node->keys[i].type == key.type)
+    //{
+    //    equal = true;
+    //}
+//
+//    if (i < node->keys.size() && equal)
+//    {
+//        return &node->rows[i];
+//    }
+//    else if (node->children.empty())
+//    {
+//        return nullptr;
+//    }
+//    else
+//    {
+//        return lookfor(node->children[i], key);
+//    }
+//}
+//
+//const Row* BTree::find(const Value& key) const
+//{
+//    const BTreeNode* current = root;
+//
+//    while (current != nullptr) {
+//        // Find the first index where current->keys[i] >= key
+//        size_t i = findIndex(current, key);
+//
+//        // Check if the key is present in the current node
+//        if (i < current->keys.size() && value_equal(current->keys[i], key))
+//        {
+//            return &current->rows[i];
+//        }
+//
+//        // If this is a leaf node, the key is not in the tree
+//        if (current->children.empty()) {
+//            return nullptr;
+//        }
+//
+//        // Move down to the appropriate child subtree
+//        current = current->children[i];
+//    }
+//
+//    return nullptr;
+//}
 
 /***********************************************************************
 *        void BTree::removeFromNode(BTreeNode* node, const Value& key)
@@ -139,7 +181,7 @@ void BTree::removeFromNode(BTreeNode* node, const Value& key) {
     size_t index = findIndex(node, key);
 
     //checks if key is in node
-    if (index < node->keys.size() && node->keys[index] == key)
+    if (index < node->keys.size() && value_equal(node->keys[index], key))
     {
         //checks if leaf
         if (node->children.empty())
@@ -158,23 +200,21 @@ void BTree::removeFromNode(BTreeNode* node, const Value& key) {
         //if its a leaf key does not exist
         if (node->children.empty())
         {
-            exit;
+            return;
         }
         //recursive to check all nodes
         else
         {
             //checks to see if node has minimun number of keys and
             //  fills if less
-            if (node->children[index]->keys.size == t - 1)
+            if (node->children[index]->keys.size() == static_cast<size_t>(t - 1))
             {
                 fill(node->children[index], index);
             }
-            removeFromNode(node->children[index], index);
+            removeFromNode(node->children[index], key);
         }
     }
 
-    (void)node;
-    (void)key;
 }
 
 
@@ -209,51 +249,61 @@ void BTree::removeFromInternal(BTreeNode* node, size_t index)
 {
     //get key and create a variable to hold the results of get function
     Value key = node->keys[index];
-    std::pair<Value, Row> values(0, 0);
+    //std::pair<Value, Row> values(0, 0);
 
     //if the predecessor can have the have keys taken from it and structure is maintained
-    if (node->children[index]->keys.size() >= t)
+    if (node->children[index]->keys.size() >= static_cast<size_t>(t))
     {
         //get predecessor and replace values
-        values = getPredecessor(node, index);
+        auto values = getPredecessor(node, index);
         node->keys[index] = values.first;
         node->rows[index] = values.second;
 
         //clean duplicate keys
-        remove(node->children[index], values.first);
+        removeFromNode(node->children[index], values.first);
     }
     //if the successor can have the have keys taken from it and structure is maintained
-    else if (node->children[index + 1]->keys.size() >= t)
+    else if (node->children[index + 1]->keys.size() >= static_cast<size_t>(t))
     {
         //get successor and replace values
-        values = getSuccessor(node, index);
+        auto values = getSuccessor(node, index);
         node->keys[index] = values.first;
         node->rows[index] = values.second;
 
         //clean duplicate keys
-        remove(node->children[index + 1], values.first);
+        removeFromNode(node->children[index + 1], values.first);
     }
     //merge and clean duplicate nodes to maintain t
     else
     {
         merge(node, index);
-        remove(node->children[index], key);
+        removeFromNode(node->children[index], key);
     }
 
 }
 
 // The largest key in the left subtree: start at children[idx], keep going to
 // the LAST child until you reach a leaf, return its last key and row.
-std::pair<Value, Row> BTree::getPredecessor(BTreeNode* node, size_t idx) {
+std::pair<Value, Row> BTree::getPredecessor(BTreeNode* node, size_t index) 
+{
     // TODO (Z)
-    return {node->keys[idx], node->rows[idx]};
+    if (node->children[index]->children.empty())
+    {
+        return getPredecessor(node->children[index], index);
+    }
+    return {node->keys[index], node->rows[index]};
 }
 
 // The smallest key in the right subtree: start at children[idx + 1], keep going
 // to the FIRST child until you reach a leaf, return its first key and row.
-std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t idx) {
+std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t index) 
+{
     // TODO (Z)
-    return {node->keys[idx], node->rows[idx]};
+    if (node->children[index + 1]->children.empty())
+    {
+        return getSuccessor(node->children[index + 1], index);
+    }
+    return {node->keys[index], node->rows[index]};
 }
 
 // children[idx] has only t - 1 keys. Make it have at least t:
