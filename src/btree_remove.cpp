@@ -1,57 +1,38 @@
-// ============================================================================
-// Z: removing a key, keeping the tree balanced with borrow and merge.
-// Tests:  make test-remove
-//
-// Your tests build trees BY HAND, so you can start before insert is finished.
-//
-// Study first: CLRS chapter 18.3, the GeeksforGeeks article "Delete Operation
-// in B-Tree", and the USFCA B-Tree visualizer (try deleting keys and watch).
-//
-// The idea (CLRS): never step down into a child that has only t - 1 keys.
-// Before going down, fill() that child so it has at least t keys. Then a key
-// can always be removed from a leaf without breaking the minimum.
-//
-// Use compareKeys(a, b) to compare keys. findIndex(node, key) is already written.
-// ============================================================================
 #include "btree.h"
 
-// 1. If the tree is empty (root == nullptr), return false.
-//    If the key isn't in the tree, return false. Don't use find() for this:
-//      it's Hushay's, and your tests must pass even before hers do. Write a
-//      small walk of your own (same idea as find: findIndex, then go down).
-// 2. removeFromNode(root, key).
-// 3. If the root now has 0 keys:
-//        if it's a leaf -> the tree is empty: delete root, root = nullptr
-//        else           -> the tree shrinks: root = its only child, delete the old root
-//    This is the ONLY way the tree gets shorter.
-// 4. count-- and return true.
+bool value_equal(const Value& key1, const Value& key2);
 
 
-/***************************************************
-    bool BTree::remove(const Value& key)
 
-steps
-    locate key
-    delete (leaf node)
-        remove key
-    delete from internal node
-        replace with in-order predecessor (largest key in its left subtree)
-        or successor (smallest key in its right subtree)
-        then delete predecessor or successor from orginal position
-    If a node has fewer keys than required
-        merge with sibling
-        or borrow a key from sibling
-    if node and sibling have minimum number of keys
-        merge into a single node
-        pulling a key from their parent to separate the merged keys
-
-    Borrowing a key
-        if the sibling has more than the min num of keys borrow a key from it
-        and adjust the keys in the parent node accordingly
-***************************************************/
+/********************************************************************************************
+*       bool BTree::remove(const Value& key)
+*
+*   steps --
+*       locate key
+*       delete (leaf node)
+*          remove key
+*       delete from internal node
+*          replace with in-order predecessor (largest key in its left subtree)
+*          or successor (smallest key in its right subtree)
+*          then delete predecessor or successor from orginal position
+*       If a node has fewer keys than required
+*          merge with sibling
+*          or borrow a key from sibling    
+*             Borrowing a key
+*             if the sibling has more than the min num of keys borrow a key from it
+*             and adjust the keys in the parent node accordingly
+*       if node and sibling have minimum number of keys
+*          merge into a single node
+*          pulling a key from their parent to separate the merged keys
+*       If the root now has 0 keys:
+*           if it's a leaf -> the tree is empty: delete root, root = nullptr
+*           else           -> the tree shrinks: root = its only child, delete the old root
+*       count-- and return true.
+*
+*   -Zander Dennison
+********************************************************************************************/
 
 bool BTree::remove(const Value& key) {
-    // TODO (Z)
     
     //checks to see if a tree exists
     if (root == nullptr)
@@ -59,19 +40,41 @@ bool BTree::remove(const Value& key) {
         return false;
     }
 
-    //obtains the location of the node
-    // i dont think this actually does something rn
-    //const Row* subtree = find(key);
+    bool found = false;
+    BTreeNode* curr = root;
+
+    //check to see if value exists
+    while (curr != nullptr && !found) 
+    {
+        size_t i = findIndex(curr, key);
+        if (i < curr->keys.size() && value_equal(curr->keys[i], key)) {
+            found = true;
+        }
+        else if (curr->children.empty()) {
+            return false;
+        }
+        else {
+            curr = curr->children[i];
+        }
+    }
 
     removeFromNode(root, key);
-    ////check to see if is leaf and deletes
-    //if (subtree->children.empty())
-    //{
-    //    removeFromLeaf(subtree, index)
-    //}
-    //if(n)
-    (void)key;
-    return false;
+
+    //shrinks key is possible
+    if (root->keys.empty()) {
+        BTreeNode* oldRoot = root;
+        if (root->children.empty()) {
+            root = nullptr;
+        }
+        else {
+            root = root->children[0];
+        }
+        delete oldRoot;
+    }
+
+    //changes size and confirms remove was completed
+    count--;
+    return true;
 }
 
 
@@ -79,15 +82,13 @@ bool BTree::remove(const Value& key) {
 
 //helpers below here
 
-/*************
-* find
-I want a delete root functions
-    it should call the delete function and set root to new value
-    new value is initialize and nullptr but can change to its child
-
-I want a find function
-    it should locate the key
-*************/
+/***************************************************************
+*       bool value_equal(const Value& key1, const Value& key2)
+*   accepts two keys
+*   Checks to see if the key values are equal
+* 
+*   -Zander Dennison
+***************************************************************/
 
 bool value_equal(const Value& key1, const Value& key2)
 {
@@ -102,69 +103,6 @@ bool value_equal(const Value& key1, const Value& key2)
 }
 
 
-/*******************************************************
-*       Row* search(BTreeNode* node, const Value& key)
-*   looks for the subtree containing the key
-*   node is a pointers to the current node
-*   key is the value being searched for
-* 
-* -Zander Dennison
-*******************************************************/
-
-//Row* BTree::find(BTreeNode* node, const Value& key)
-//{
-//    if (node == nullptr)
-//    {
-//        return nullptr;
-//    }
-//    
-//    size_t i = BTree::findIndex(node, key);
-//
-    //bool equal = false;
-    //if (node->keys[i].text == key.text && node->keys[i].type == key.type)
-    //{
-    //    equal = true;
-    //}
-//
-//    if (i < node->keys.size() && equal)
-//    {
-//        return &node->rows[i];
-//    }
-//    else if (node->children.empty())
-//    {
-//        return nullptr;
-//    }
-//    else
-//    {
-//        return lookfor(node->children[i], key);
-//    }
-//}
-//
-//const Row* BTree::find(const Value& key) const
-//{
-//    const BTreeNode* current = root;
-//
-//    while (current != nullptr) {
-//        // Find the first index where current->keys[i] >= key
-//        size_t i = findIndex(current, key);
-//
-//        // Check if the key is present in the current node
-//        if (i < current->keys.size() && value_equal(current->keys[i], key))
-//        {
-//            return &current->rows[i];
-//        }
-//
-//        // If this is a leaf node, the key is not in the tree
-//        if (current->children.empty()) {
-//            return nullptr;
-//        }
-//
-//        // Move down to the appropriate child subtree
-//        current = current->children[i];
-//    }
-//
-//    return nullptr;
-//}
 
 /***********************************************************************
 *        void BTree::removeFromNode(BTreeNode* node, const Value& key)
@@ -207,11 +145,23 @@ void BTree::removeFromNode(BTreeNode* node, const Value& key) {
         {
             //checks to see if node has minimun number of keys and
             //  fills if less
-            if (node->children[index]->keys.size() == static_cast<size_t>(t - 1))
+            bool isLastChild = (index == node->keys.size());
+
+            if (node->children[index]->keys.size() == static_cast<size_t>(t - 1)) 
             {
-                fill(node->children[index], index);
+                fill(node, index);
             }
-            removeFromNode(node->children[index], key);
+
+            // If the last child was merged with its left sibling, move to the merged child
+            if (isLastChild && index > node->keys.size()) 
+            {
+                removeFromNode(node->children[index - 1], key);
+            }
+            else 
+            {
+                removeFromNode(node->children[index], key);
+            }
+
         }
     }
 
@@ -282,28 +232,49 @@ void BTree::removeFromInternal(BTreeNode* node, size_t index)
 
 }
 
-// The largest key in the left subtree: start at children[idx], keep going to
-// the LAST child until you reach a leaf, return its last key and row.
+
+
+/*********************************************************************************************
+*       std::pair<Value, Row> BTree::getPredecessor(BTreeNode* node, size_t index) 
+*   returns a two values value and row
+*   accepts the node and index 
+*   checks to see if the array is empty 
+*   gets the last element of the children array
+* 
+*   -Zander Dennison
+********************************************************************************************/
+
 std::pair<Value, Row> BTree::getPredecessor(BTreeNode* node, size_t index) 
 {
-    // TODO (Z)
-    if (node->children[index]->children.empty())
+    BTreeNode* current = node->children[index];
+    while (!current->children.empty()) 
     {
-        return getPredecessor(node->children[index], index);
+        current = current->children.back();
     }
-    return {node->keys[index], node->rows[index]};
+    return { current->keys.back(), current->rows.back() };
 }
 
-// The smallest key in the right subtree: start at children[idx + 1], keep going
-// to the FIRST child until you reach a leaf, return its first key and row.
+
+
+/*********************************************************************************************
+*       std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t index)
+*   returns a two values value and row
+*   accepts the node and index
+*   checks to see if the array is empty
+*   gets the first element of the children array
+*
+*   -Zander Dennison
+********************************************************************************************/
+
 std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t index) 
 {
     // TODO (Z)
-    if (node->children[index + 1]->children.empty())
+    BTreeNode* current = node->children[index + 1];
+    while (!current->children.empty())
     {
-        return getSuccessor(node->children[index + 1], index);
+        current = current->children.front();
     }
-    return {node->keys[index], node->rows[index]};
+    return { current->keys.front(), current->rows.front() };
 }
 
 // children[idx] has only t - 1 keys. Make it have at least t:
