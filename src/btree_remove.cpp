@@ -277,16 +277,21 @@ std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t index)
     return { current->keys.front(), current->rows.front() };
 }
 
-// children[idx] has only t - 1 keys. Make it have at least t:
-//   if the LEFT sibling (idx - 1) has >= t keys  -> borrowFromPrev(node, idx)
-//   else if the RIGHT sibling (idx + 1) has >= t -> borrowFromNext(node, idx)
-//   else merge with a sibling: merge(node, idx) if there is a right sibling,
-//                              otherwise merge(node, idx - 1)
+
+
+/*********************************************************
+*       void BTree::fill(BTreeNode* node, size_t index) 
+*   accpets a pointer to the subtree and an index value
+*   moves keys and rows to maintain t - 1 size
+*   borrows from the left if it has >= t keys
+*   or borrows from the right if its has >= t keys
+*   or merges with right or left
+* 
+*   -Zander Dennison
+*********************************************************/
+
 void BTree::fill(BTreeNode* node, size_t index) 
 {
-    // TODO (Z)
-
-
     if (index != 0 && node->children[index - 1]->keys.size() >= static_cast<size_t>(t))
     {
         borrowFromPrev(node, index);
@@ -309,11 +314,17 @@ void BTree::fill(BTreeNode* node, size_t index)
     }
 }
 
-// Rotate right through the parent:
-//   parent's keys[idx - 1] moves DOWN to the front of children[idx]
-//   left sibling's LAST key moves UP into parent's keys[idx - 1]
-//   if not leaves: left sibling's last child moves to the front of children[idx]
-// (Move the rows together with their keys!)
+
+
+/******************************************************************************
+*       void BTree::borrowFromPrev(BTreeNode* node, size_t index)
+*   accepts a subtree node and an index
+*   "Rotate right through parent"
+*   moves the previous key from the parent to the front of children[index]
+*       and the left siblings last key to the previous key if they are leafs
+*   else it moves the left siblings last key to the front of child[index]
+******************************************************************************/
+
 void BTree::borrowFromPrev(BTreeNode* node, size_t index) 
 {
     BTreeNode* child = node->children[index];
@@ -334,10 +345,17 @@ void BTree::borrowFromPrev(BTreeNode* node, size_t index)
     sibling->rows.pop_back();
 }
 
-// Rotate left through the parent:
-//   parent's keys[idx] moves DOWN to the end of children[idx]
-//   right sibling's FIRST key moves UP into parent's keys[idx]
-//   if not leaves: right sibling's first child moves to the end of children[idx]
+
+
+/**********************************************************************************
+*       void BTree::borrowFromNext(BTreeNode* node, size_t index) 
+*   accepts a subtree node and an index
+*   "Rotate left through parent"
+*   moves the key[index] from the parent to the end of children[index]
+*       and the right siblings first key to the parent key[index] if they are leafs
+*   else it moves the right siblings first key to the end of child[index]
+**********************************************************************************/
+
 void BTree::borrowFromNext(BTreeNode* node, size_t index) 
 {
     BTreeNode* child = node->children[index];
@@ -358,13 +376,19 @@ void BTree::borrowFromNext(BTreeNode* node, size_t index)
     sibling->rows.erase(sibling->rows.begin());
 }
 
-// Merge children[idx + 1] INTO children[idx]:
-//   left = children[idx], right = children[idx + 1]
-//   parent's keys[idx] moves DOWN to the end of left
-//   all of right's keys, rows (and children, if not leaves) go to the end of left
-//   remove keys[idx], rows[idx] and children[idx + 1] from the parent
-//   delete right (careful: don't destroy() it, its children now belong to left)
-void BTree::merge(BTreeNode* node, size_t index) {
+
+
+/***************************************************************************
+*       void BTree::merge(BTreeNode* node, size_t index)
+*   accepts a subtree node and an index
+*   moves parent keys[index] to the end of the left child
+*   copys all keys rows and child form the right child to the left child
+*   removed the copied parent's keys, rows, and children
+*   deletes the right child from the parent node
+***************************************************************************/
+
+void BTree::merge(BTreeNode* node, size_t index) 
+{
     // TODO (Z)
     BTreeNode* left = node->children[index];
     BTreeNode* right = node->children[index + 1];
