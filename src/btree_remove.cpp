@@ -282,10 +282,31 @@ std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t index)
 //   else if the RIGHT sibling (idx + 1) has >= t -> borrowFromNext(node, idx)
 //   else merge with a sibling: merge(node, idx) if there is a right sibling,
 //                              otherwise merge(node, idx - 1)
-void BTree::fill(BTreeNode* node, size_t idx) {
+void BTree::fill(BTreeNode* node, size_t index) 
+{
     // TODO (Z)
-    (void)node;
-    (void)idx;
+
+
+    if (index != 0 && node->children[index - 1]->keys.size() >= static_cast<size_t>(t))
+    {
+        borrowFromPrev(node, index);
+    }
+    
+    else if (index != node->keys.size() && node->children[index + 1]->keys.size() >= static_cast<size_t>(t))
+    {
+        borrowFromNext(node, index);
+    }
+    else
+    {
+        if (index != node->keys.size())
+        {
+            merge(node, index);
+        }
+        else
+        {
+            merge(node, index - 1);
+        }
+    }
 }
 
 // Rotate right through the parent:
@@ -293,20 +314,48 @@ void BTree::fill(BTreeNode* node, size_t idx) {
 //   left sibling's LAST key moves UP into parent's keys[idx - 1]
 //   if not leaves: left sibling's last child moves to the front of children[idx]
 // (Move the rows together with their keys!)
-void BTree::borrowFromPrev(BTreeNode* node, size_t idx) {
-    // TODO (Z)
-    (void)node;
-    (void)idx;
+void BTree::borrowFromPrev(BTreeNode* node, size_t index) 
+{
+    BTreeNode* child = node->children[index];
+    BTreeNode* sibling = node->children[index - 1];
+
+    child->keys.insert(child->keys.begin(), node->keys[index - 1]);
+    child->rows.insert(child->rows.begin(), node->rows[index - 1]);
+
+     if (!child->children.empty()) {
+        child->children.insert(child->children.begin(), sibling->children.back());
+        sibling->children.pop_back();
+    }
+
+   node->keys[index - 1] = sibling->keys.back();
+    node->rows[index - 1] = sibling->rows.back();
+
+    sibling->keys.pop_back();
+    sibling->rows.pop_back();
 }
 
 // Rotate left through the parent:
 //   parent's keys[idx] moves DOWN to the end of children[idx]
 //   right sibling's FIRST key moves UP into parent's keys[idx]
 //   if not leaves: right sibling's first child moves to the end of children[idx]
-void BTree::borrowFromNext(BTreeNode* node, size_t idx) {
-    // TODO (Z)
-    (void)node;
-    (void)idx;
+void BTree::borrowFromNext(BTreeNode* node, size_t index) 
+{
+    BTreeNode* child = node->children[index];
+    BTreeNode* sibling = node->children[index + 1];
+
+    child->keys.push_back(node->keys[index]);
+    child->rows.push_back(node->rows[index]);
+
+    if (!child->children.empty()) {
+        child->children.push_back(sibling->children.front());
+        sibling->children.erase(sibling->children.begin());
+    }
+
+    node->keys[index] = sibling->keys.front();
+    node->rows[index] = sibling->rows.front();
+
+    sibling->keys.erase(sibling->keys.begin());
+    sibling->rows.erase(sibling->rows.begin());
 }
 
 // Merge children[idx + 1] INTO children[idx]:
@@ -315,8 +364,31 @@ void BTree::borrowFromNext(BTreeNode* node, size_t idx) {
 //   all of right's keys, rows (and children, if not leaves) go to the end of left
 //   remove keys[idx], rows[idx] and children[idx + 1] from the parent
 //   delete right (careful: don't destroy() it, its children now belong to left)
-void BTree::merge(BTreeNode* node, size_t idx) {
+void BTree::merge(BTreeNode* node, size_t index) {
     // TODO (Z)
-    (void)node;
-    (void)idx;
+    BTreeNode* left = node->children[index];
+    BTreeNode* right = node->children[index + 1];
+
+    left->keys.push_back(node->keys[index]);
+    left->rows.push_back(node->rows[index]);
+
+    for (size_t i = 0; i <right->keys.size(); ++i)
+    {
+        left->keys.push_back(right->keys[i]);
+        left->rows.push_back(right->rows[i]);
+    }
+
+    if (!left->children.empty())
+    {
+        for (size_t i = 0; i < right->children.size(); ++i)
+        {
+            left->children.push_back(right->children[i]);
+        }
+    }
+    
+    node->keys.erase(node->keys.begin() + index);
+    node->rows.erase(node->rows.begin() + index);
+    node->children.erase(node->children.begin() + index + 1);
+
+    delete right;
 }
