@@ -1,6 +1,5 @@
-// B-Tree tests for Hushay: find, insert (+ splitting), update, traverseInOrder.
+// B-Tree tests: find, insert (+ splitting), update, traverseInOrder.
 // Run with:  make test-insert
-// Work top to bottom: each section builds on the one before.
 
 #include "../src/btree.h"
 #include <algorithm>
@@ -209,7 +208,6 @@ int main() {
         bigTest("500 keys shuffled, t=2",    2, shuffled);
         bigTest("500 keys shuffled, t=3",    3, shuffled);
         bigTest("500 keys shuffled, t=5",    5, shuffled);
-        // Complete the degree/order matrix without changing the original cases.
         for (int degree : {3, 4, 5}) {
             bigTest("100 keys ascending, t=" + std::to_string(degree), degree, asc);
             bigTest("100 keys descending, t=" + std::to_string(degree), degree, desc);
