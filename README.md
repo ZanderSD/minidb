@@ -1,82 +1,68 @@
 # MiniDB
 
-A tiny SQL database built from scratch in C++ for our Data Structures & Algorithms class.
+A small SQL database written from scratch in C++ for our Data Structures & Algorithms class. No external libraries or database engines, everything is hand written.
 
-MiniDB reads SQL commands from the terminal, breaks them into tokens, parses them, and will run them against tables stored in memory. No external libraries, no existing database engines — everything is written by hand.
+You type SQL into a prompt, MiniDB tokenizes it, parses it, and (once the executor is done) runs it against tables stored in B-Trees.
 
-## Current Status
-
-The front end is done: MiniDB tokenizes and parses every planned command. The B-Tree that will store each table's rows is also done and tested. What's left is the validator and executor that connect the two.
+## Where we're at
 
 ```
-Tokenizer  →  Parser  →  Validator  →  Executor  →  Storage (B-Tree)
-   ✅          ✅           ⬜            ⬜             🟡
+Tokenizer  ->  Parser  ->  Validator  ->  Executor  ->  Storage (B-Tree)
+  done         done        not yet       not yet       B-Tree done
 ```
 
-✅ done  🟡 in progress  ⬜ not started
+- **Tokenizer** handles every keyword, symbol, number and string we need.
+- **Parser** handles `CREATE TABLE`, `INSERT`, `SELECT` (with `WHERE` and `ORDER BY`), `UPDATE`, `DELETE`, `DROP TABLE` and `TRUNCATE TABLE`.
+- **B-Tree** has insert, find, update, remove and in-order traversal working.
+- **Validator / executor** aren't started yet, so right now the REPL just prints what it parsed.
 
-| Stage     | Status                                                     | Tests                     |
-| --------- | ---------------------------------------------------------- | ------------------------- |
-| Tokenizer | All planned SQL tokens                                     | 46 passing                |
-| Parser    | `CREATE`, `INSERT`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE` | 151 passing     |
-| Validator | Not started                                                | —                         |
-| Executor  | Not started                                                | —                         |
-| Storage   | B-Tree done (insert, find, update, remove, traverse); table layer not started | 86 passing |
+There are 283 tests and they all pass. CI runs `make test` on every push and PR.
 
-283 tests total. GitHub Actions runs `make test` on every push and PR.
+## Supported SQL
 
-## Features
+```sql
+CREATE TABLE users (id INT, name TEXT, age INT);
+INSERT INTO users VALUES (1, 'bob', 20);
+SELECT * FROM users;
+SELECT name, age FROM users WHERE age > 18 AND (name = 'bob' OR id = 2) ORDER BY age DESC;
+UPDATE users SET age = 21 WHERE id = 1;
+DELETE FROM users WHERE id = 1;
+DROP TABLE users;
+TRUNCATE TABLE users;
+```
 
-| Command          | Example                                                          | Status     |
-| ---------------- | ---------------------------------------------------------------- | ---------- |
-| `CREATE TABLE`   | `CREATE TABLE users (id INT, name TEXT, age INT);`               | 🟡 Parsed  |
-| `INSERT`         | `INSERT INTO users VALUES (1, 'bob', 20);`                       | 🟡 Parsed  |
-| `SELECT`         | `SELECT * FROM users;` or `SELECT name, age FROM users;`         | 🟡 Parsed  |
-| `WHERE`          | `... WHERE age > 18 AND (name = 'bob' OR id = 2)`                | 🟡 Parsed  |
-| `ORDER BY`       | `SELECT * FROM users ORDER BY age DESC, name;`                   | 🟡 Parsed  |
-| `UPDATE`         | `UPDATE users SET age = 21 WHERE id = 1;`                        | 🟡 Parsed  |
-| `DELETE`         | `DELETE FROM users WHERE id = 1;`                                | 🟡 Parsed  |
-| `DROP TABLE`     | `DROP TABLE users;`                                              | 🟡 Parsed  |
-| `TRUNCATE TABLE` | `TRUNCATE TABLE users;`                                          | 🟡 Parsed  |
+`WHERE` works with `=`, `!=`, `<`, `>`, `<=`, `>=`, `AND`, `OR` and parentheses. Types are just `INT` and `TEXT`.
 
-`WHERE` supports `=`, `!=`, `<`, `>`, `<=`, `>=`, `AND`, `OR` and parentheses.
+## Building
 
-The REPL has line editing: arrow keys move the cursor, up/down scroll through command history. Type `.exit` (or Ctrl-D) to quit.
-
-## Build & Run
-
-Requires a C++17 compiler (g++ or clang++) and `make`.
+You need g++ (or clang++) with C++17 and `make`.
 
 ```bash
-make        # build ./minidb
+make            # builds ./minidb
 ./minidb
-make test   # build and run all tests
-make clean  # remove built binaries
+make test       # runs every test
+make clean
 ```
 
-Smaller test groups:
+You can also run one group of tests at a time:
 
 ```bash
-make test-parser   # tokenizer + parser
-make test-insert   # B-Tree insert / find / update / traverse
-make test-remove   # B-Tree remove (borrow and merge)
-make test-full     # randomized insert/remove checked against std::map
-make test-asan     # all tests with AddressSanitizer + UBSan
+make test-parser    # tokenizer + parser
+make test-insert    # B-Tree insert/find/update/traverse
+make test-remove    # B-Tree remove
+make test-full      # random inserts/removes compared against std::map
+make test-asan      # everything with AddressSanitizer
 ```
 
-## Example Session
-
-The REPL prints what it parsed, because there is no executor yet.
+## Example
 
 ```
 db > CREATE TABLE users (id INT, name TEXT, age INT);
 Parsed CREATE TABLE users with columns: id(INT) name(TEXT) age(INT)
 db > INSERT INTO users VALUES (1, 'bob', 20);
 Parsed INSERT INTO users with values: 1 'bob' 20
-db > SELECT name, age FROM users WHERE age > 18 AND (name = 'bob' OR id = 2) ORDER BY age DESC;
-Parsed SELECT from users, columns: name age, WHERE ((age > 18) AND ((name = 'bob') OR (id = 2))), ORDER BY age(DESC)
-db > UPDATE users SET age = 21 WHERE id = 1;
-Parsed UPDATE users, set: age = 21, WHERE (id = 1)
+db > SELECT name FROM users WHERE age > 18 ORDER BY age DESC;
+Parsed SELECT from users, columns: name, WHERE (age > 18), ORDER BY age(DESC)
 db > DELETE FROM users WHERE id = 1;
 Parsed DELETE from users, WHERE (id = 1)
 db > SELECT FROM users;
@@ -84,29 +70,23 @@ Syntax error: Expected column names but found 'FROM'
 db > .exit
 ```
 
-## How It Works
+Up/down arrows go through your command history. `.exit` or Ctrl-D quits.
 
-Every command goes through the same pipeline:
+## How it works
 
-1. **Tokenizer** — splits the raw string into tokens (`SELECT`, `users`, `>`, `18`, ...).
-2. **Parser** — checks the tokens follow SQL grammar and builds a `Statement`. Bad syntax throws a `ParseError`.
-3. **Validator** — checks the statement makes sense, like whether the table and columns exist.
-4. **Executor** — runs the statement against the stored tables.
-5. **Storage** — keeps the rows, indexed with a B-tree.
+1. The **tokenizer** splits the input into tokens, e.g. `SELECT`, `users`, `>`, `18`.
+2. The **parser** is recursive descent. It checks the grammar and builds a `Statement`, or throws a `ParseError`. `WHERE` clauses become an expression tree (`AND`/`OR` nodes with comparisons at the leaves).
+3. The **validator** (todo) will check that tables and columns actually exist.
+4. The **executor** (todo) will run the statement.
+5. **Storage**: each table keeps its rows in a B-Tree keyed by its first column.
 
-### Example: `CREATE TABLE`
-
-```sql
-CREATE TABLE users (name TEXT, age INT);
-```
-
-The tokenizer turns the string into a flat list:
+For example `CREATE TABLE users (name TEXT, age INT);` tokenizes to
 
 ```
 CREATE  TABLE  IDENTIFIER(users)  (  IDENTIFIER(name)  TEXT  ,  IDENTIFIER(age)  INT  )  ;  END
 ```
 
-The parser (recursive descent) turns that list into a `Statement`:
+and parses to
 
 ```
        CREATE
@@ -116,88 +96,45 @@ The parser (recursive descent) turns that list into a `Statement`:
       name TEXT  age INT
 ```
 
-### The B-Tree
+### B-Tree
 
-Each table will store its rows in one B-Tree, keyed by the first column:
+We followed CLRS chapter 18. With minimum degree `t`, a node holds at most `2t - 1` keys and every node except the root holds at least `t - 1`. Insert splits full nodes on the way down, and remove borrows from a sibling or merges on the way down, so neither one has to go back up the tree. find, insert, update and remove are all O(log n).
 
-```
-key = the first column's value   (e.g. 5)
-row = all of the row's values    (e.g. {5, 'bob', 20})
-```
+Keys are compared with `compareKeys`, so INT keys sort as numbers (9 before 10) and TEXT sorts alphabetically. The tests run `checkValid()` after each operation to make sure the tree is still a valid B-Tree.
 
-It follows CLRS chapter 18. With minimum degree `t`, every node holds at most `2t - 1` keys and every non-root node at least `t - 1`. Insert splits full nodes on the way down; remove borrows from or merges with a sibling on the way down, so neither has to walk back up. `INT` keys compare as numbers and `TEXT` keys alphabetically.
-
-| Operation         | Cost              |
-| ----------------- | ----------------- |
-| `find`            | O(log n)          |
-| `insert`          | O(log n)          |
-| `update`          | O(log n)          |
-| `remove`          | O(log n)          |
-| `traverseInOrder` | O(n)              |
-
-The tests call `checkValid()` after every operation to make sure none of the rules broke.
-
-## Project Structure
+## Files
 
 ```
-minidb/
-├── README.md
-├── GUIDE.MD                # how the B-Tree work was split up
-├── Makefile
-├── .github/workflows/      # CI: runs make test
-├── src/
-│   ├── main.cpp            # REPL: line editing, history, prints parsed statements
-│   ├── tokenizer.h/.cpp    # string → tokens
-│   ├── parser.h/.cpp       # tokens → Statement (recursive descent)
-│   ├── statement.h         # Statement, Column, Value, Expr types
-│   ├── btree.h             # B-Tree interface
-│   ├── btree.cpp           # key comparison, getters, checkValid
-│   ├── btree_insert.cpp    # find, insert, split, update, traverse
-│   └── btree_remove.cpp    # remove, borrow, merge
-└── tests/
-    ├── tokenizer_test.cpp
-    ├── parser_test.cpp
-    ├── btree_insert_test.cpp
-    ├── btree_remove_test.cpp
-    └── btree_full_test.cpp
+src/
+  main.cpp           REPL
+  tokenizer.h/.cpp   string -> tokens
+  parser.h/.cpp      tokens -> Statement
+  statement.h        Statement, Column, Value, Expr
+  btree.h            B-Tree interface
+  btree.cpp          compareKeys, checkValid, getters
+  btree_insert.cpp   find, insert, split, update, traverse
+  btree_remove.cpp   remove, borrow, merge
+tests/               one test file per part
+GUIDE.MD             how we split up the B-Tree work
 ```
 
-## Data Structures Used
+## TODO
 
-- **Vector** — list of tokens, columns and values in a statement
-- **Expression tree** — `WHERE` clauses like `age > 18 AND name = 'bob'` (`Expr` nodes with `AND` / `OR` / compare)
-- **B-tree** — stores each table's rows, keyed by the first column
-- **Hash map** (`unordered_map`) _(planned)_ — table name → table lookup
-
-## Roadmap
-
-- [x] REPL loop with `.exit`
-- [x] Line editing and command history
-- [x] Tokenizer
-- [x] Parse `CREATE TABLE` and `INSERT`
-- [x] Parse `SELECT` with column lists and `ORDER BY`
-- [x] Parse `WHERE` with comparisons, `AND` / `OR` and parentheses
-- [x] Parse `UPDATE`, `DELETE`, `DROP TABLE`, `TRUNCATE TABLE`
-- [x] Syntax error messages
-- [x] B-Tree: search, insert, update, traversal
-- [x] B-Tree: remove with borrow and merge
-- [x] CI running all tests
 - [ ] Table storage on top of the B-Tree
 - [ ] Validator
-- [ ] Executor for `CREATE TABLE` and `INSERT`
-- [ ] Executor for `SELECT` with `WHERE` and `ORDER BY`
-- [ ] Executor for `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`
-- [ ] _Stretch:_ save/load tables to a file
+- [ ] Execute `CREATE TABLE` and `INSERT`
+- [ ] Execute `SELECT` with `WHERE` and `ORDER BY`
+- [ ] Execute `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`
+- [ ] Maybe: save/load tables to a file
 
 ## Team
 
-- Rajeev Shrestha — Tokenizer, Parser, REPL, Database Engine
-- Hushay Madzingira — B-Tree search, insert, update, traversal
-- Zander Dennison — B-Tree remove
+- Rajeev Shrestha: tokenizer, parser, REPL, database engine
+- Hushay Madzingira: B-Tree insert, find, update, traversal
+- Zander Dennison: B-Tree remove
 
 ## References
 
-- [Crafting Interpreters — Scanning](https://craftinginterpreters.com/scanning.html)
-- [Crafting Interpreters — Parsing Expressions](https://craftinginterpreters.com/parsing-expressions.html)
-- Cormen et al., _Introduction to Algorithms_ (CLRS), Chapter 18: B-Trees
-- [USFCA B-Tree Visualization](https://www.cs.usfca.edu/~galles/visualization/BTree.html)
+- [Crafting Interpreters](https://craftinginterpreters.com/) (scanning and parsing chapters)
+- CLRS, *Introduction to Algorithms*, chapter 18
+- [USFCA B-Tree visualizer](https://www.cs.usfca.edu/~galles/visualization/BTree.html)
