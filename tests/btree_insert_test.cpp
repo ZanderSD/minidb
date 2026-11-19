@@ -209,6 +209,12 @@ int main() {
         bigTest("500 keys shuffled, t=2",    2, shuffled);
         bigTest("500 keys shuffled, t=3",    3, shuffled);
         bigTest("500 keys shuffled, t=5",    5, shuffled);
+        // Complete the degree/order matrix without changing the original cases.
+        for (int degree : {3, 4, 5}) {
+            bigTest("100 keys ascending, t=" + std::to_string(degree), degree, asc);
+            bigTest("100 keys descending, t=" + std::to_string(degree), degree, desc);
+        }
+        bigTest("500 keys shuffled, t=4", 4, shuffled);
     }
     {
         BTree tree(2);
@@ -266,6 +272,124 @@ int main() {
         for (const auto& kv : all) if (!sameRow(kv.second, rowFor(std::stoi(kv.first.text)))) ok = false;
         if (!ok) fail("every pair has the matching row", "a row does not belong to its key");
         else     pass("every pair has the matching row");
+    }
+
+    // ------------------------------------------------------------------
+    std::cout << "\n-- 9. split and row consistency regressions --\n";
+    {
+        const std::string name = "duplicate in a full root does not split or replace rows";
+        BTree tree(2);
+        for (int k = 1; k <= 3; ++k) tree.insert(I(k), rowFor(k));
+        const BTreeNode* root = tree.getRoot();
+        bool rejected = !tree.insert(I(2), Row{I(2), T("duplicate")});
+        const Row* row = tree.find(I(2));
+        if (!rejected || tree.getRoot() != root || tree.height() != 1 ||
+            tree.size() != 3 || !row || !sameRow(*row, rowFor(2)) || !tree.checkValid())
+            fail(name, "duplicate changed the tree or original row");
+        else pass(name);
+    }
+    {
+        const std::string name = "duplicate in a full child does not split it";
+        BTree tree(2);
+        for (int k = 1; k <= 5; ++k) tree.insert(I(k), rowFor(k));
+        const BTreeNode* root = tree.getRoot();
+        const BTreeNode* right = root->children.back();
+        bool rejected = !tree.insert(I(5), Row{I(5), T("duplicate")});
+        const Row* row = tree.find(I(5));
+        if (!rejected || tree.getRoot() != root || root->keys.size() != 1 ||
+            root->children.back() != right || right->keys.size() != 3 ||
+            tree.size() != 5 || !row || !sameRow(*row, rowFor(5)) || !tree.checkValid())
+            fail(name, "duplicate changed the full child or original row");
+        else pass(name);
+    }
+    {
+        const std::string name = "splitting an internal child moves its subtrees and median row";
+        BTree tree(2);
+        for (int k = 1; k <= 12; ++k) tree.insert(I(k), rowFor(k));
+        const BTreeNode* root = tree.getRoot();
+        bool ok = tree.insert(I(13), rowFor(13));
+        ok = ok && tree.getRoot() == root && root->keys.size() == 2 &&
+             root->keys[0].text == "4" && root->keys[1].text == "8" &&
+             tree.height() == 3 && tree.checkValid();
+        auto all = tree.traverseInOrder();
+        ok = ok && all.size() == 13;
+        for (size_t i = 0; i < all.size(); ++i) {
+            int k = static_cast<int>(i) + 1;
+            const Row* row = tree.find(I(k));
+            ok = ok && compareKeys(all[i].first, I(k)) == 0 &&
+                 sameRow(all[i].second, rowFor(k)) && row && sameRow(*row, rowFor(k));
+        }
+        if (!ok) fail(name, "internal split lost ordering, children, or matching rows");
+        else pass(name);
+    }
+    {
+        const std::string name = "updates preserve keys in both internal nodes and leaves";
+        BTree tree(3);
+        for (int k = 1; k <= 100; ++k) tree.insert(I(k), rowFor(k));
+        bool ok = true;
+        for (int k = 1; k <= 100; ++k) {
+            Row replacement{I(k), T("updated" + std::to_string(k))};
+            ok = tree.update(I(k), replacement) && ok;
+            const Row* row = tree.find(I(k));
+            ok = ok && row && sameRow(*row, replacement) && tree.checkValid();
+        }
+        auto all = tree.traverseInOrder();
+        ok = ok && tree.size() == 100 && all.size() == 100;
+        for (size_t i = 0; i < all.size(); ++i) {
+            int k = static_cast<int>(i) + 1;
+            ok = ok && compareKeys(all[i].first, I(k)) == 0 &&
+                 sameRow(all[i].second, Row{I(k), T("updated" + std::to_string(k))});
+        }
+        ok = ok && !tree.find(I(-1)) && !tree.find(I(101));
+        if (!ok) fail(name, "an update, search, or traversal returned the wrong record");
+        else pass(name);
+    }
+    {
+        const std::string name = "empty or mismatched rows are rejected without changing records";
+        BTree tree(2);
+        bool ok = !tree.insert(I(1), {}) && !tree.insert(I(1), rowFor(2)) &&
+                  !tree.insert(I(1), Row{T("1")}) && tree.size() == 0 && !tree.getRoot();
+        tree.insert(I(1), rowFor(1));
+        ok = ok && !tree.update(I(1), {}) && !tree.update(I(1), rowFor(2)) &&
+             !tree.update(I(1), Row{T("1")});
+        const Row* row = tree.find(I(1));
+        ok = ok && row && sameRow(*row, rowFor(1)) && tree.size() == 1 && tree.checkValid();
+        if (!ok) fail(name, "invalid row was accepted or changed the stored record");
+        else pass(name);
+    }
+    {
+        const std::string name = "INT equivalence and mixed types use compareKeys consistently";
+        BTree tree(2);
+        const Value padded{ValueType::INT, "009"};
+        bool ok = tree.insert(I(9), rowFor(9)) && !tree.insert(padded, Row{padded}) &&
+                  tree.insert(T("9"), Row{T("9"), T("text")}) &&
+                  tree.insert(I(-10), rowFor(-10)) && tree.insert(T("10"), Row{T("10")});
+        Row replacement{padded, T("updated")};
+        ok = ok && tree.update(padded, replacement);
+        const Row* row = tree.find(I(9));
+        ok = ok && row && sameRow(*row, replacement);
+        Row textRow{T("9"), T("updated text")};
+        ok = ok && tree.update(T("9"), textRow);
+        row = tree.find(T("9"));
+        ok = ok && row && sameRow(*row, textRow) && !tree.find(T("missing"));
+        auto all = tree.traverseInOrder();
+        std::vector<Value> expected{I(-10), I(9), T("10"), T("9")};
+        ok = ok && all.size() == expected.size() && tree.checkValid();
+        for (size_t i = 0; i < all.size() && i < expected.size(); ++i)
+            ok = ok && compareKeys(all[i].first, expected[i]) == 0 &&
+                 !all[i].second.empty() && compareKeys(all[i].first, all[i].second.front()) == 0;
+        if (!ok) fail(name, "typed comparison, duplicate rejection, or row alignment failed");
+        else pass(name);
+    }
+    {
+        const std::string name = "replacing an owned tree frees nodes and resets its count";
+        BTree tree(2);
+        for (int k = 1; k <= 100; ++k) tree.insert(I(k), rowFor(k));
+        tree.loadTreeForTesting(nullptr);
+        bool ok = tree.size() == 0 && !tree.getRoot() && tree.traverseInOrder().empty() &&
+                  tree.insert(I(7), rowFor(7)) && tree.checkValid();
+        if (!ok) fail(name, "tree could not be reused after cleanup");
+        else pass(name);
     }
 
     std::cout << "\n" << passed << " passed, " << failed << " failed\n";
