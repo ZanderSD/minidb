@@ -1,8 +1,7 @@
-// B-Tree tests for Z: remove (+ borrow and merge).
+// B-Tree tests: remove (+ borrow and merge).
 // Run with:  make test-remove
 //
-// These tests build trees BY HAND and walk them directly, so they do NOT
-// depend on insert, find or traverseInOrder. You can start right away.
+// These tests build trees by hand, so they don't depend on insert or find.
 //
 // Pictures use t = 2 (min 1 key per non-root node, max 3) unless they say t = 3.
 

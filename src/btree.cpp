@@ -1,4 +1,4 @@
-// Shared B-Tree helpers. ALREADY DONE: you don't need to edit this file.
+// Shared B-Tree helpers: key comparison, getters and the validity checker.
 #include "btree.h"
 #include <stdexcept>
 

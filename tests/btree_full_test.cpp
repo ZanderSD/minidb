@@ -1,4 +1,4 @@
-// This only passes when BOTH Hushay's and Z's parts are done.
+// Randomized insert/remove/find mixed against std::map.
 // Run with:  make test-full
 
 #include <csignal>

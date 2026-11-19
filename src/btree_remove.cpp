@@ -268,7 +268,6 @@ std::pair<Value, Row> BTree::getPredecessor(BTreeNode* node, size_t index)
 
 std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t index) 
 {
-    // TODO (Z)
     BTreeNode* current = node->children[index + 1];
     while (!current->children.empty())
     {
@@ -389,7 +388,6 @@ void BTree::borrowFromNext(BTreeNode* node, size_t index)
 
 void BTree::merge(BTreeNode* node, size_t index) 
 {
-    // TODO (Z)
     BTreeNode* left = node->children[index];
     BTreeNode* right = node->children[index + 1];
 
