@@ -23,7 +23,7 @@ Tokenizer  →  Parser  →  Validator  →  Executor  →  Storage (B-Tree)
 | Executor  | Not started                                                | —                         |
 | Storage   | B-Tree done (insert, find, update, remove, traverse); table layer not started | 86 passing |
 
-**283 tests passing.** GitHub Actions runs `make test` on every push and pull request.
+283 tests total. GitHub Actions runs `make test` on every push and PR.
 
 ## Features
 
@@ -135,7 +135,7 @@ It follows CLRS chapter 18. With minimum degree `t`, every node holds at most `2
 | `remove`          | O(log n)          |
 | `traverseInOrder` | O(n)              |
 
-`checkValid()` checks every B-Tree rule (key order, node sizes, child counts, leaf depth) and the tests call it after every operation.
+The tests call `checkValid()` after every operation to make sure none of the rules broke.
 
 ## Project Structure
 

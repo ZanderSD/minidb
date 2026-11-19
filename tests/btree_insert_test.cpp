@@ -273,7 +273,7 @@ int main() {
     }
 
     // ------------------------------------------------------------------
-    std::cout << "\n-- 9. split and row consistency regressions --\n";
+    std::cout << "\n-- 9. more split / update cases --\n";
     {
         const std::string name = "duplicate in a full root does not split or replace rows";
         BTree tree(2);
@@ -356,7 +356,7 @@ int main() {
         else pass(name);
     }
     {
-        const std::string name = "INT equivalence and mixed types use compareKeys consistently";
+        const std::string name = "INT 009 equals 9, mixed INT/TEXT keys";
         BTree tree(2);
         const Value padded{ValueType::INT, "009"};
         bool ok = tree.insert(I(9), rowFor(9)) && !tree.insert(padded, Row{padded}) &&
@@ -376,17 +376,17 @@ int main() {
         for (size_t i = 0; i < all.size() && i < expected.size(); ++i)
             ok = ok && compareKeys(all[i].first, expected[i]) == 0 &&
                  !all[i].second.empty() && compareKeys(all[i].first, all[i].second.front()) == 0;
-        if (!ok) fail(name, "typed comparison, duplicate rejection, or row alignment failed");
+        if (!ok) fail(name, "wrong row or order with mixed keys");
         else pass(name);
     }
     {
-        const std::string name = "replacing an owned tree frees nodes and resets its count";
+        const std::string name = "loadTreeForTesting frees old tree";
         BTree tree(2);
         for (int k = 1; k <= 100; ++k) tree.insert(I(k), rowFor(k));
         tree.loadTreeForTesting(nullptr);
         bool ok = tree.size() == 0 && !tree.getRoot() && tree.traverseInOrder().empty() &&
                   tree.insert(I(7), rowFor(7)) && tree.checkValid();
-        if (!ok) fail(name, "tree could not be reused after cleanup");
+        if (!ok) fail(name, "tree broken after reload");
         else pass(name);
     }
 
