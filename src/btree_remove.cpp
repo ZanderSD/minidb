@@ -1,127 +1,418 @@
-// ============================================================================
-// Z: removing a key, keeping the tree balanced with borrow and merge.
-// Tests:  make test-remove
-//
-// Your tests build trees BY HAND, so you can start before insert is finished.
-//
-// Study first: CLRS chapter 18.3, the GeeksforGeeks article "Delete Operation
-// in B-Tree", and the USFCA B-Tree visualizer (try deleting keys and watch).
-//
-// The idea (CLRS): never step down into a child that has only t - 1 keys.
-// Before going down, fill() that child so it has at least t keys. Then a key
-// can always be removed from a leaf without breaking the minimum.
-//
-// Use compareKeys(a, b) to compare keys. findIndex(node, key) is already written.
-// ============================================================================
 #include "btree.h"
 
-// 1. If the tree is empty (root == nullptr), return false.
-//    If the key isn't in the tree, return false. Don't use find() for this:
-//    it's Hushay's, and your tests must pass even before hers do. Write a
-//    small walk of your own (same idea as find: findIndex, then go down).
-// 2. removeFromNode(root, key).
-// 3. If the root now has 0 keys:
-//        if it's a leaf -> the tree is empty: delete root, root = nullptr
-//        else           -> the tree shrinks: root = its only child, delete the old root
-//    This is the ONLY way the tree gets shorter.
-// 4. count-- and return true.
+bool value_equal(const Value& key1, const Value& key2);
+
+
+
+/********************************************************************************************
+*       bool BTree::remove(const Value& key)
+*
+*   steps --
+*       locate key
+*       delete (leaf node)
+*          remove key
+*       delete from internal node
+*          replace with in-order predecessor (largest key in its left subtree)
+*          or successor (smallest key in its right subtree)
+*          then delete predecessor or successor from orginal position
+*       If a node has fewer keys than required
+*          merge with sibling
+*          or borrow a key from sibling    
+*             Borrowing a key
+*             if the sibling has more than the min num of keys borrow a key from it
+*             and adjust the keys in the parent node accordingly
+*       if node and sibling have minimum number of keys
+*          merge into a single node
+*          pulling a key from their parent to separate the merged keys
+*       If the root now has 0 keys:
+*           if it's a leaf -> the tree is empty: delete root, root = nullptr
+*           else           -> the tree shrinks: root = its only child, delete the old root
+*       count-- and return true.
+*
+*   -Zander Dennison
+********************************************************************************************/
+
 bool BTree::remove(const Value& key) {
-    // TODO (Z)
-    (void)key;
-    return false;
+    
+    //checks to see if a tree exists
+    if (root == nullptr)
+    {
+        return false;
+    }
+
+    bool found = false;
+    BTreeNode* curr = root;
+
+    //check to see if value exists
+    while (curr != nullptr && !found) 
+    {
+        size_t i = findIndex(curr, key);
+        if (i < curr->keys.size() && value_equal(curr->keys[i], key)) {
+            found = true;
+        }
+        else if (curr->children.empty()) {
+            return false;
+        }
+        else {
+            curr = curr->children[i];
+        }
+    }
+
+    removeFromNode(root, key);
+
+    //shrinks key is possible
+    if (root->keys.empty()) {
+        BTreeNode* oldRoot = root;
+        if (root->children.empty()) {
+            root = nullptr;
+        }
+        else {
+            root = root->children[0];
+        }
+        delete oldRoot;
+    }
+
+    //changes size and confirms remove was completed
+    count--;
+    return true;
 }
 
-// Remove `key` from the subtree rooted at `node`.
-//   idx = findIndex(node, key)
-//   Case A: key is in this node (idx < keys.size() and keys[idx] == key)
-//             leaf     -> removeFromLeaf(node, idx)
-//             internal -> removeFromInternal(node, idx)
-//   Case B: key is not in this node
-//             leaf     -> key isn't in the tree (stop)
-//             internal -> if children[idx] has only t - 1 keys, fill(node, idx) first.
-//                         (fill may merge, so recompute which child to go into!)
-//                         then recurse into that child.
+
+
+
+//helpers below here
+
+/***************************************************************
+*       bool value_equal(const Value& key1, const Value& key2)
+*   accepts two keys
+*   Checks to see if the key values are equal
+* 
+*   -Zander Dennison
+***************************************************************/
+
+bool value_equal(const Value& key1, const Value& key2)
+{
+    if (key1.text == key2.text && key1.type == key2.type)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+
+
+/***********************************************************************
+*        void BTree::removeFromNode(BTreeNode* node, const Value& key)
+*   removes a key from the subtree node
+*   key is the value being removed
+*   node is a pointer to the subtree
+* 
+*   -Zander Dennison
+************************************************************************/
+
 void BTree::removeFromNode(BTreeNode* node, const Value& key) {
-    // TODO (Z)
-    (void)node;
-    (void)key;
+
+    ///creates index
+    size_t index = findIndex(node, key);
+
+    //checks if key is in node
+    if (index < node->keys.size() && value_equal(node->keys[index], key))
+    {
+        //checks if leaf
+        if (node->children.empty())
+        {
+            removeFromLeaf(node, index);
+        }
+        //interal node delete
+        else
+        {
+            removeFromInternal(node, index);
+        }
+    }
+    //if key is not in node
+    else
+    {
+        //if its a leaf key does not exist
+        if (node->children.empty())
+        {
+            return;
+        }
+        //recursive to check all nodes
+        else
+        {
+            //checks to see if node has minimun number of keys and
+            //  fills if less
+            bool isLastChild = (index == node->keys.size());
+
+            if (node->children[index]->keys.size() == static_cast<size_t>(t - 1)) 
+            {
+                fill(node, index);
+            }
+
+            // If the last child was merged with its left sibling, move to the merged child
+            if (isLastChild && index > node->keys.size()) 
+            {
+                removeFromNode(node->children[index - 1], key);
+            }
+            else 
+            {
+                removeFromNode(node->children[index], key);
+            }
+
+        }
+    }
+
 }
 
-// Simple: erase keys[idx] and rows[idx].
-void BTree::removeFromLeaf(BTreeNode* node, size_t idx) {
-    // TODO (Z)
-    (void)node;
-    (void)idx;
+
+
+
+/*********************************************************************
+*       void BTree::removeFromLeaf(BTreeNode* node, size_t index) 
+*   Removes key and row from leaf
+*   accepts a pointer to the node
+*   accepts an index value of the row
+* 
+*   -Zander Dennison
+*********************************************************************/
+void BTree::removeFromLeaf(BTreeNode* node, size_t index) 
+{
+    node->rows.erase(node->rows.begin() + index);
+    node->keys.erase(node->keys.begin() + index);
 }
 
-// keys[idx] is in an internal node. Three cases (CLRS 2a, 2b, 2c):
-//   2a. children[idx] has >= t keys:
-//         replace keys[idx]/rows[idx] with the PREDECESSOR, then remove the
-//         predecessor from children[idx].
-//   2b. else if children[idx + 1] has >= t keys:
-//         same thing with the SUCCESSOR and children[idx + 1].
-//   2c. else both have t - 1 keys:
-//         merge(node, idx), then remove the key from the merged child.
-void BTree::removeFromInternal(BTreeNode* node, size_t idx) {
-    // TODO (Z)
-    (void)node;
-    (void)idx;
+
+
+/**********************************************************************
+*       void BTree::removeFromInternal(BTreeNode* node, size_t index) 
+*   identifies and removes the value from an internal node
+*   calls functions to maintain the structure of BTree
+*   node a pointer to the subtree
+*   index is the position of values 
+* 
+*   -Zander Dennison
+*************************************************************************/
+void BTree::removeFromInternal(BTreeNode* node, size_t index) 
+{
+    //get key and create a variable to hold the results of get function
+    Value key = node->keys[index];
+    //std::pair<Value, Row> values(0, 0);
+
+    //if the predecessor can have the have keys taken from it and structure is maintained
+    if (node->children[index]->keys.size() >= static_cast<size_t>(t))
+    {
+        //get predecessor and replace values
+        auto values = getPredecessor(node, index);
+        node->keys[index] = values.first;
+        node->rows[index] = values.second;
+
+        //clean duplicate keys
+        removeFromNode(node->children[index], values.first);
+    }
+    //if the successor can have the have keys taken from it and structure is maintained
+    else if (node->children[index + 1]->keys.size() >= static_cast<size_t>(t))
+    {
+        //get successor and replace values
+        auto values = getSuccessor(node, index);
+        node->keys[index] = values.first;
+        node->rows[index] = values.second;
+
+        //clean duplicate keys
+        removeFromNode(node->children[index + 1], values.first);
+    }
+    //merge and clean duplicate nodes to maintain t
+    else
+    {
+        merge(node, index);
+        removeFromNode(node->children[index], key);
+    }
+
 }
 
-// The largest key in the left subtree: start at children[idx], keep going to
-// the LAST child until you reach a leaf, return its last key and row.
-std::pair<Value, Row> BTree::getPredecessor(BTreeNode* node, size_t idx) {
-    // TODO (Z)
-    return {node->keys[idx], node->rows[idx]};
+
+
+/*********************************************************************************************
+*       std::pair<Value, Row> BTree::getPredecessor(BTreeNode* node, size_t index) 
+*   returns a two values value and row
+*   accepts the node and index 
+*   checks to see if the array is empty 
+*   gets the last element of the children array
+* 
+*   -Zander Dennison
+********************************************************************************************/
+
+std::pair<Value, Row> BTree::getPredecessor(BTreeNode* node, size_t index) 
+{
+    BTreeNode* current = node->children[index];
+    while (!current->children.empty()) 
+    {
+        current = current->children.back();
+    }
+    return { current->keys.back(), current->rows.back() };
 }
 
-// The smallest key in the right subtree: start at children[idx + 1], keep going
-// to the FIRST child until you reach a leaf, return its first key and row.
-std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t idx) {
+
+
+/*********************************************************************************************
+*       std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t index)
+*   returns a two values value and row
+*   accepts the node and index
+*   checks to see if the array is empty
+*   gets the first element of the children array
+*
+*   -Zander Dennison
+********************************************************************************************/
+
+std::pair<Value, Row> BTree::getSuccessor(BTreeNode* node, size_t index) 
+{
     // TODO (Z)
-    return {node->keys[idx], node->rows[idx]};
+    BTreeNode* current = node->children[index + 1];
+    while (!current->children.empty())
+    {
+        current = current->children.front();
+    }
+    return { current->keys.front(), current->rows.front() };
 }
 
-// children[idx] has only t - 1 keys. Make it have at least t:
-//   if the LEFT sibling (idx - 1) has >= t keys  -> borrowFromPrev(node, idx)
-//   else if the RIGHT sibling (idx + 1) has >= t -> borrowFromNext(node, idx)
-//   else merge with a sibling: merge(node, idx) if there is a right sibling,
-//                              otherwise merge(node, idx - 1)
-void BTree::fill(BTreeNode* node, size_t idx) {
-    // TODO (Z)
-    (void)node;
-    (void)idx;
+
+
+/*********************************************************
+*       void BTree::fill(BTreeNode* node, size_t index) 
+*   accpets a pointer to the subtree and an index value
+*   moves keys and rows to maintain t - 1 size
+*   borrows from the left if it has >= t keys
+*   or borrows from the right if its has >= t keys
+*   or merges with right or left
+* 
+*   -Zander Dennison
+*********************************************************/
+
+void BTree::fill(BTreeNode* node, size_t index) 
+{
+    if (index != 0 && node->children[index - 1]->keys.size() >= static_cast<size_t>(t))
+    {
+        borrowFromPrev(node, index);
+    }
+    
+    else if (index != node->keys.size() && node->children[index + 1]->keys.size() >= static_cast<size_t>(t))
+    {
+        borrowFromNext(node, index);
+    }
+    else
+    {
+        if (index != node->keys.size())
+        {
+            merge(node, index);
+        }
+        else
+        {
+            merge(node, index - 1);
+        }
+    }
 }
 
-// Rotate right through the parent:
-//   parent's keys[idx - 1] moves DOWN to the front of children[idx]
-//   left sibling's LAST key moves UP into parent's keys[idx - 1]
-//   if not leaves: left sibling's last child moves to the front of children[idx]
-// (Move the rows together with their keys!)
-void BTree::borrowFromPrev(BTreeNode* node, size_t idx) {
-    // TODO (Z)
-    (void)node;
-    (void)idx;
+
+
+/******************************************************************************
+*       void BTree::borrowFromPrev(BTreeNode* node, size_t index)
+*   accepts a subtree node and an index
+*   "Rotate right through parent"
+*   moves the previous key from the parent to the front of children[index]
+*       and the left siblings last key to the previous key if they are leafs
+*   else it moves the left siblings last key to the front of child[index]
+******************************************************************************/
+
+void BTree::borrowFromPrev(BTreeNode* node, size_t index) 
+{
+    BTreeNode* child = node->children[index];
+    BTreeNode* sibling = node->children[index - 1];
+
+    child->keys.insert(child->keys.begin(), node->keys[index - 1]);
+    child->rows.insert(child->rows.begin(), node->rows[index - 1]);
+
+     if (!child->children.empty()) {
+        child->children.insert(child->children.begin(), sibling->children.back());
+        sibling->children.pop_back();
+    }
+
+   node->keys[index - 1] = sibling->keys.back();
+    node->rows[index - 1] = sibling->rows.back();
+
+    sibling->keys.pop_back();
+    sibling->rows.pop_back();
 }
 
-// Rotate left through the parent:
-//   parent's keys[idx] moves DOWN to the end of children[idx]
-//   right sibling's FIRST key moves UP into parent's keys[idx]
-//   if not leaves: right sibling's first child moves to the end of children[idx]
-void BTree::borrowFromNext(BTreeNode* node, size_t idx) {
-    // TODO (Z)
-    (void)node;
-    (void)idx;
+
+
+/**********************************************************************************
+*       void BTree::borrowFromNext(BTreeNode* node, size_t index) 
+*   accepts a subtree node and an index
+*   "Rotate left through parent"
+*   moves the key[index] from the parent to the end of children[index]
+*       and the right siblings first key to the parent key[index] if they are leafs
+*   else it moves the right siblings first key to the end of child[index]
+**********************************************************************************/
+
+void BTree::borrowFromNext(BTreeNode* node, size_t index) 
+{
+    BTreeNode* child = node->children[index];
+    BTreeNode* sibling = node->children[index + 1];
+
+    child->keys.push_back(node->keys[index]);
+    child->rows.push_back(node->rows[index]);
+
+    if (!child->children.empty()) {
+        child->children.push_back(sibling->children.front());
+        sibling->children.erase(sibling->children.begin());
+    }
+
+    node->keys[index] = sibling->keys.front();
+    node->rows[index] = sibling->rows.front();
+
+    sibling->keys.erase(sibling->keys.begin());
+    sibling->rows.erase(sibling->rows.begin());
 }
 
-// Merge children[idx + 1] INTO children[idx]:
-//   left = children[idx], right = children[idx + 1]
-//   parent's keys[idx] moves DOWN to the end of left
-//   all of right's keys, rows (and children, if not leaves) go to the end of left
-//   remove keys[idx], rows[idx] and children[idx + 1] from the parent
-//   delete right (careful: don't destroy() it, its children now belong to left)
-void BTree::merge(BTreeNode* node, size_t idx) {
+
+
+/***************************************************************************
+*       void BTree::merge(BTreeNode* node, size_t index)
+*   accepts a subtree node and an index
+*   moves parent keys[index] to the end of the left child
+*   copys all keys rows and child form the right child to the left child
+*   removed the copied parent's keys, rows, and children
+*   deletes the right child from the parent node
+***************************************************************************/
+
+void BTree::merge(BTreeNode* node, size_t index) 
+{
     // TODO (Z)
-    (void)node;
-    (void)idx;
+    BTreeNode* left = node->children[index];
+    BTreeNode* right = node->children[index + 1];
+
+    left->keys.push_back(node->keys[index]);
+    left->rows.push_back(node->rows[index]);
+
+    for (size_t i = 0; i <right->keys.size(); ++i)
+    {
+        left->keys.push_back(right->keys[i]);
+        left->rows.push_back(right->rows[i]);
+    }
+
+    if (!left->children.empty())
+    {
+        for (size_t i = 0; i < right->children.size(); ++i)
+        {
+            left->children.push_back(right->children[i]);
+        }
+    }
+    
+    node->keys.erase(node->keys.begin() + index);
+    node->rows.erase(node->rows.begin() + index);
+    node->children.erase(node->children.begin() + index + 1);
+
+    delete right;
 }
